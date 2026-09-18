@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Formatting
+        run: test -z "$(gofmt -l .)"
+      - name: Vet
+        run: go vet ./...
+      - name: Test with the race detector
+        run: go test -race -cover ./...
+      - name: Build
+        run: go build -trimpath -o /tmp/kv ./cmd/kv
+      - name: Exercise it end to end
+        run: |
+          /tmp/kv -dir /tmp/kvdata put city Lahore
+          /tmp/kv -dir /tmp/kvdata get city
+          /tmp/kv -dir /tmp/kvdata delete city
+          /tmp/kv -dir /tmp/kvdata scan
+          /tmp/kv -dir /tmp/kvdata bench 20000
+          /tmp/kv -dir /tmp/kvdata compact
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t kv:ci .
+      - name: Run it
+        run: docker run --rm kv:ci -h || true
