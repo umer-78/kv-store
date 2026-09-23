@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>kv — LSM Key-Value Store Demo</title>
+  <meta name="description" content="Visual LSM-tree demo: WAL, memtable, SSTables, bloom filters and compaction — all in the browser.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232563eb'/><text x='16' y='22' font-size='16' text-anchor='middle' fill='white' font-family='monospace'>kv</text></svg>">
+  <style>
+    :root {
+      --bg: #f6f7f9; --surface: #ffffff; --surface-2: #eef0f4; --border: #dde1e8;
+      --text: #16181d; --muted: #5d6573; --accent: #2563eb; --accent-ink: #ffffff;
+      --good: #15803d; --bad: #b91c1c; --radius: 12px;
+      --shadow: 0 1px 2px rgb(16 24 40 / 0.06), 0 4px 16px rgb(16 24 40 / 0.05);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e1116; --surface: #161a21; --surface-2: #1d222b; --border: #2a303b;
+        --text: #e8eaee; --muted: #9aa3b2; --accent: #60a5fa; --accent-ink: #0b1220;
+        --good: #4ade80; --bad: #f87171; --shadow: none; color-scheme: dark;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body { font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+    a { color: var(--accent); }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+    header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    header.top h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+    header.top p { margin: 2px 0 0; color: var(--muted); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); min-width: 0; margin-bottom: 16px; }
+    .card h2 { font-size: 15px; margin: 0 0 12px; }
+    .grid { display: grid; gap: 16px; }
+    .grid.two { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+    input, select, textarea, button { font: inherit; color: inherit; }
+    input, select {
+      width: 100%; padding: 9px 11px; border-radius: 9px;
+      border: 1px solid var(--border); background: var(--surface-2); outline: none; min-width: 0;
+    }
+    input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    button { cursor: pointer; border: 1px solid var(--border); background: var(--surface-2); padding: 9px 14px; border-radius: 9px; font-weight: 600; }
+    button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+    button.danger { background: color-mix(in srgb, var(--bad) 15%, var(--surface)); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, var(--border)); }
+    .row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+    .row > * { flex: 1 1 140px; }
+    .row > button { flex: 0 0 auto; }
+    .muted { color: var(--muted); }
+    .mono { font-family: var(--mono); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .table-wrap { overflow-x: auto; }
+    footer { margin-top: 32px; color: var(--muted); font-size: 13px; text-align: center; }
+    .result-box { font-family: var(--mono); font-size: 14px; padding: 12px; background: var(--surface-2); border-radius: 8px; margin-top: 10px; white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto; }
+    .finding { padding: 10px 12px; border-radius: 8px; margin: 8px 0; font-size: 14px; }
+    .finding.ok { background: color-mix(in srgb, var(--good) 12%, transparent); border: 1px solid color-mix(in srgb, var(--good) 30%, transparent); }
+    .finding.risk { background: color-mix(in srgb, var(--bad) 12%, transparent); border: 1px solid color-mix(in srgb, var(--bad) 30%, transparent); }
+    .finding .kind { font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .finding.ok .kind { color: var(--good); }
+    .finding.risk .kind { color: var(--bad); }
+    .finding .detail { margin-top: 4px; color: var(--muted); }
+    .stat { background: var(--surface-2); border-radius: 8px; padding: 8px 12px; min-width: 110px; display: inline-block; margin: 4px 6px 4px 0; }
+    .stat .k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; display: block; }
+    .stat .v { font-family: var(--mono); font-size: 18px; font-weight: 700; }
+    /* pipeline diagram */
+    .pipeline { display: flex; gap: 8px; flex-wrap: wrap; align-items: stretch; margin: 10px 0; }
+    .stage { flex: 1 1 140px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; min-width: 130px; }
+    .stage h3 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+    .stage .entries { font-family: var(--mono); font-size: 12px; max-height: 140px; overflow: auto; }
+    .stage .entries div { padding: 2px 0; border-bottom: 1px dashed var(--border); }
+    .stage .count { font-family: var(--mono); font-weight: 700; font-size: 16px; }
+    .stage.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .tomb { color: var(--bad); text-decoration: line-through; }
+    .arrow { align-self: center; color: var(--muted); font-weight: 700; }
+    /* bloom bits */
+    .bloom { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 6px; }
+    .bloom i { width: 10px; height: 10px; border-radius: 2px; background: var(--surface); border: 1px solid var(--border); display: inline-block; }
+    .bloom i.on { background: var(--accent); border-color: var(--accent); }
+    .bloom i.probe { background: var(--good); border-color: var(--good); }
+    .sst { border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin: 8px 0; }
+    .sst .sst-head { display: flex; justify-content: space-between; font-weight: 700; font-size: 14px; }
+    .sst .sst-meta { color: var(--muted); font-size: 12px; font-family: var(--mono); }
+    code { font-family: var(--mono); font-size: 13px; }
+    @media (max-width: 640px) { .arrow { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div>
+        <h1>kv — log-structured key-value store</h1>
+        <p>Write-ahead log → memtable → SSTables with bloom filters. Watch a write travel the LSM path.</p>
+      </div>
+      <a href="https://github.com/umer-78/kv-store">Source on GitHub</a>
+    </header>
+
+    <section class="card">
+      <h2>Operations</h2>
+      <p class="muted" style="margin-top:0">Every put/delete appends to the WAL first, then the memtable. Past the size limit the memtable flushes to an immutable SSTable. Lookups check memtable → newest SSTable → …, stopping at the first answer including a tombstone.</p>
+      <div class="row">
+        <div>
+          <label for="opKey">Key</label>
+          <input id="opKey" class="mono" value="city" spellcheck="false">
+        </div>
+        <div>
+          <label for="opVal">Value (for put)</label>
+          <input id="opVal" class="mono" value="Lahore" spellcheck="false">
+        </div>
+        <div>
+          <label for="memLimit">Flush at (entries)</label>
+          <select id="memLimit">
+            <option value="4">4</option>
+            <option value="6" selected>6</option>
+            <option value="8">8</option>
+            <option value="9999">never</option>
+          </select>
+        </div>
+        <button class="primary" id="putBtn">put</button>
+        <button id="getBtn">get</button>
+        <button class="danger" id="delBtn">delete</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button id="flushBtn">force flush → sstable</button>
+        <button id="compactBtn">compact all</button>
+        <button id="crashBtn">simulate crash recovery</button>
+        <button id="resetBtn">reset</button>
+      </div>
+      <div id="opResult" style="margin-top:12px" aria-live="polite"></div>
+    </section>
+
+    <section class="card">
+      <h2>Storage pipeline</h2>
+      <div class="pipeline">
+        <div class="stage" id="stageWal">
+          <h3>1 · WAL</h3>
+          <div class="count" id="walCount">0</div>
+          <div class="entries" id="walEntries"></div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="stage" id="stageMem">
+          <h3>2 · Memtable</h3>
+          <div class="count" id="memCount">0</div>
+          <div class="entries" id="memEntries"></div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="stage" id="stageSst">
+          <h3>3 · SSTables</h3>
+          <div class="count" id="sstCount">0</div>
+          <div class="entries" id="sstEntries"></div>
+        </div>
+      </div>
+      <div id="sstList"></div>
+      <div id="stats" style="margin-top:8px"></div>
+    </section>
+
+    <div class="grid two">
+      <section class="card">
+        <h2>Bloom filter</h2>
+        <p class="muted" style="margin-top:0">Bits set when the newest SSTable was written. Probe a key: green bits are the hash positions; one clear bit means <b>definitely absent</b> — no disk read.</p>
+        <div class="row">
+          <div>
+            <label for="bloomKey">Probe key</label>
+            <input id="bloomKey" class="mono" value="missing-key" spellcheck="false">
+          </div>
+          <button class="primary" id="bloomBtn">probe</button>
+        </div>
+        <div class="bloom" id="bloomBits" aria-label="bloom filter bit array"></div>
+        <div id="bloomOut" class="result-box">Probe a key.</div>
+      </section>
+
+      <section class="card">
+        <h2>Read path trace</h2>
+        <p class="muted" style="margin-top:0">Where a get looked, in order, and why it stopped.</p>
+        <div id="readTrace" class="result-box">No reads yet.</div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>What the design gets right</h2>
+      <div class="grid two">
+        <div>
+          <h3 style="font-size:13px;color:var(--muted);margin:0 0 6px">A delete does not delete anything</h3>
+          <p style="margin-top:0">It writes a tombstone. An older value may still sit in an older file — dropping the marker lets it come back on the next read. Tombstones are only discarded after a full merge.</p>
+        </div>
+        <div>
+          <h3 style="font-size:13px;color:var(--muted);margin:0 0 6px">Log before memory</h3>
+          <p style="margin-top:0">If the memtable were updated first and the process died before the append, the write would have been acknowledged and then vanished. WAL first, always.</p>
+        </div>
+        <div>
+          <h3 style="font-size:13px;color:var(--muted);margin:0 0 6px">File before truncate</h3>
+          <p style="margin-top:0">A flush writes the SSTable, fsyncs it, then clears the log. Truncating first would lose everything the memtable held if the crash landed between.</p>
+        </div>
+        <div>
+          <h3 style="font-size:13px;color:var(--muted);margin:0 0 6px">Bloom: no false negatives</h3>
+          <p style="margin-top:0">The filter may say "maybe present" for an absent key; it must never say "absent" for a present one. Splitmix64 avalanche on the second hash keeps false positives near 1%.</p>
+        </div>
+      </div>
+      <div class="result-box">$ kv -dir data bench 50000
+random reads, present      38888 ops/sec   (50000 found)
+random reads, absent     2107237 ops/sec   (50000 correctly absent)
+bloom filters answered 82.3% of file lookups without a read</div>
+    </section>
+
+    <footer>56 tests · Go · -race clean · Built by <a href="https://github.com/umer-78">Umer Hashmi</a></footer>
+  </div>
+
+  <script>
+    // === FNV-1a + splitmix64-style finaliser for independent hashes (port of bloom.go) ===
+    function hash32(str, seed = 0x811c9dc5) {
+      let h = seed >>> 0;
+      for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 0x01000193) >>> 0;
+      }
+      return h >>> 0;
+    }
+    function splitmix64(h) {
+      // 32-bit approximation of the avalanche finaliser — independent of the raw mix
+      let z = (h + 0x9e3779b9) >>> 0;
+      z = Math.imul(z ^ (z >>> 16), 0x21f0aaad) >>> 0;
+      z = Math.imul(z ^ (z >>> 15), 0x735a2d97) >>> 0;
+      z = (z ^ (z >>> 15)) >>> 0;
+      return z;
+    }
+
+    const BLOOM_M = 256; // bits
+    const BLOOM_K = 3;
+
+    function bloomPositions(key) {
+      const h1 = hash32(key, 0x811c9dc5);
+      const h2 = splitmix64(h1);
+      const pos = [];
+      for (let i = 0; i < BLOOM_K; i++) {
+        // h1 + i*h2 style double hashing, spread by another mix
+        const p = (h1 + Math.imul(i + 1, h2)) >>> 0;
+        pos.push(p % BLOOM_M);
+      }
+      return pos;
+    }
+
+    class Bloom {
+      constructor() { this.bits = new Uint8Array(BLOOM_M); this.n = 0; }
+      add(key) {
+        for (const p of bloomPositions(key)) this.bits[p] = 1;
+        this.n++;
+      }
+      // may contain
+      test(key) {
+        const probe = new Set(bloomPositions(key));
+        for (const p of probe) if (!this.bits[p]) return { present: false, probe, hit: false };
+        return { present: true, probe, hit: true };
+      }
+      get bitsSet() { return this.bits.reduce((a, b) => a + b, 0); }
+      merge(other) { for (let i = 0; i < BLOOM_M; i++) this.bits[i] |= other.bits[i]; }
+    }
+
+    // === Fake store engine ===
+    const TOMB = Symbol('tombstone');
+    function createStore(flushAt = 6) {
+      return {
+        flushAt,
+        wal: [],            // {op, key, value?}
+        mem: new Map(),     // key -> value | TOMB (insertion-ordered ≈ sorted for display we sort)
+        sstables: [],       // {id, entries: Map, bloom, bytes}
+        nextId: 1,
+        stats: { puts: 0, gets: 0, deletes: 0, flushes: 0, compactions: 0, bloomHits: 0, bloomMiss: 0, diskReads: 0 },
+        tombstonesLive: 0,
+      };
+    }
+    let store = createStore(6);
+
+    function put(key, value) {
+      store.wal.push({ op: 'put', key, value });
+      const had = store.mem.has(key);
+      if (!had && store.tombstonesLive && [...store.mem.values()].includes(TOMB)) { /* no-op counter */ }
+      store.mem.set(key, value);
+      store.stats.puts++;
+      maybeFlush();
+    }
+    function del(key) {
+      store.wal.push({ op: 'delete', key });
+      const wasLive = store.mem.has(key) && store.mem.get(key) !== TOMB;
+      const inOld = !wasLive && sstGet(key, { silent: true }).found;
+      store.mem.set(key, TOMB);
+      store.tombstonesLive++;
+      store.stats.deletes++;
+      maybeFlush();
+      return wasLive || inOld;
+    }
+    function maybeFlush() {
+      if (store.mem.size >= store.flushAt) flush();
+    }
+    function flush() {
+      if (!store.mem.size) return;
+      // sort keys (SSTables are sorted)
+      const sorted = [...store.mem.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1);
+      const entries = new Map(sorted);
+      const bloom = new Bloom();
+      for (const [k, v] of entries) if (v !== TOMB) bloom.add(k);
+      const bytes = entries.size * 24 + Math.ceil(BLOOM_M / 8) + 64;
+      store.sstables.push({ id: store.nextId++, entries, bloom, bytes });
+      store.wal = []; // file before truncate → table exists, then clear log
+      store.mem = new Map();
+      store.stats.flushes++;
+    }
+    function sstGet(key, opts = {}) {
+      // newest → oldest
+      for (let i = store.sstables.length - 1; i >= 0; i--) {
+        const sst = store.sstables[i];
+        const probe = sst.bloom.test(key);
+        if (!probe.present) {
+          store.stats.bloomMiss++; // definitely not — answered without a "read"
+          if (!opts.silent) store.trace.push({ layer: `sst #${sst.id}`, key, result: 'bloom: definitely absent', ok: false, bloom: true });
+          continue;
+        }
+        store.stats.bloomHits++; // bloom said maybe → we "read" the file
+        if (!opts.silent) store.trace.push({ layer: `sst #${sst.id}`, key, result: sst.entries.has(key) ? 'found in file' : 'maybe → scanned, not present', ok: sst.entries.has(key), bloom: true });
+        if (sst.entries.has(key)) return { found: true, value: sst.entries.get(key), from: `sst #${sst.id}` };
+      }
+      return { found: false };
+    }
+    store.trace = [];
+
+    function get(key) {
+      store.stats.gets++;
+      store.trace = [];
+      store.trace.push({ layer: 'memtable', key, result: store.mem.has(key) ? (store.mem.get(key) === TOMB ? 'tombstone → stop' : 'found') : 'absent', ok: store.mem.has(key) && store.mem.get(key) !== TOMB, tomb: store.mem.get(key) === TOMB });
+      if (store.mem.has(key)) {
+        const v = store.mem.get(key);
+        if (v === TOMB) return { found: false, value: null, deleted: true, from: 'memtable tombstone' };
+        return { found: true, value: v, from: 'memtable' };
+      }
+      const r = sstGet(key);
+      if (r.found) {
+        if (r.value === TOMB) return { found: false, value: null, deleted: true, from: r.from + ' tombstone' };
+        store.stats.diskReads++;
+        return { found: true, value: r.value, from: r.from };
+      }
+      return { found: false, value: null, deleted: false, from: null };
+    }
+
+    function compact() {
+      if (store.sstables.length <= 1 && !store.mem.size) return;
+      if (store.mem.size) flush();
+      // merge all newest-first, keep first sighting of each key, drop tombstones (after full merge)
+      const merged = new Map();
+      for (let i = store.sstables.length - 1; i >= 0; i--) {
+        for (const [k, v] of store.sstables[i].entries) {
+          if (!merged.has(k)) merged.set(k, v);
+        }
+      }
+      // full merge → tombstones can go
+      for (const [k, v] of [...merged]) if (v === TOMB) merged.delete(k);
+      const bloom = new Bloom();
+      for (const [k] of merged) bloom.add(k);
+      const bytes = merged.size * 24 + Math.ceil(BLOOM_M / 8) + 64;
+      store.sstables = [{ id: store.nextId++, entries: merged, bloom, bytes }];
+      store.stats.compactions++;
+      store.tombstonesLive = [...merged.values()].filter(v => v === TOMB).length;
+    }
+
+    // crash: drop WAL tail (simulate torn write) but keep memtable? Real design: memtable is rebuilt FROM wal on recovery.
+    // Here: memtable lives only as write-ahead in this demo's process — recovery replays WAL, discarding torn tail.
+    function crashRecover() {
+      const walBefore = store.wal.length;
+      // discard a "torn" last record if any (simulate: drop last incomplete)
+      const discarded = Math.min(1, walBefore);
+      const replay = store.wal.slice(0, walBefore - discarded);
+      // rebuild memtable from WAL (memtable was in memory, lost on crash)
+      store.mem = new Map();
+      for (const rec of replay) {
+        if (rec.op === 'put') store.mem.set(rec.key, rec.value);
+        else store.mem.set(rec.key, TOMB);
+      }
+      store.wal = replay;
+      return { recovered: replay.length, discarded };
+    }
+
+    // === UI ===
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const fmtVal = (v) => v === TOMB ? '⟨tombstone⟩' : String(v);
+
+    function setResult(html) { $('opResult').innerHTML = html; }
+
+    function render() {
+      // WAL
+      $('walCount').textContent = store.wal.length;
+      $('walEntries').innerHTML = store.wal.slice(-12).map(r =>
+        `<div>${r.op === 'put' ? '+' : '−'} ${esc(r.key)}${r.op === 'put' ? ' = ' + esc(r.value) : ''}</div>`
+      ).join('') || '<div class="muted">(empty)</div>';
+      // memtable (sorted display)
+      $('memCount').textContent = store.mem.size;
+      const memSorted = [...store.mem.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1);
+      $('memEntries').innerHTML = memSorted.map(([k, v]) =>
+        `<div class="${v === TOMB ? 'tomb' : ''}">${esc(k)} = ${esc(fmtVal(v))}</div>`
+      ).join('') || '<div class="muted">(empty)</div>';
+      // sstables
+      $('sstCount').textContent = store.sstables.length;
+      $('sstEntries').innerHTML = store.sstables.map(s =>
+        `<div>#${s.id} · ${s.entries.size} keys · ${s.bytes} B</div>`
+      ).join('') || '<div class="muted">(none)</div>';
+      $('sstList').innerHTML = store.sstables.map((s, i) => {
+        const live = [...s.entries.values()].filter(v => v !== TOMB).length;
+        const tombs = s.entries.size - live;
+        const sorted = [...s.entries.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1);
+        return `<div class="sst ${i === store.sstables.length - 1 ? 'active' : ''}">
+          <div class="sst-head"><span>sst-${s.id}.sst ${i === store.sstables.length - 1 ? '(newest)' : ''}</span>
+            <span class="sst-meta">${s.entries.size} entries · ${live} live${tombs ? ` · ${tombs} tomb` : ''} · bloom ${s.bloom.bitsSet}/${BLOOM_M} bits</span></div>
+          <div class="sst-meta" style="margin-top:4px">${sorted.slice(0, 10).map(([k, v]) => `${esc(k)}=${esc(fmtVal(v))}`).join('  ')}${sorted.length > 10 ? '  …' : ''}</div>
+        </div>`;
+      }).join('');
+      // stats
+      const st = store.stats;
+      const totalLookups = st.bloomHits + st.bloomMiss;
+      const hitRate = totalLookups ? (st.bloomMiss / totalLookups * 100) : 0;
+      $('stats').innerHTML = `
+        <span class="stat"><span class="k">puts</span><span class="v">${st.puts}</span></span>
+        <span class="stat"><span class="k">gets</span><span class="v">${st.gets}</span></span>
+        <span class="stat"><span class="k">deletes</span><span class="v">${st.deletes}</span></span>
+        <span class="stat"><span class="k">flushes</span><span class="v">${st.flushes}</span></span>
+        <span class="stat"><span class="k">compactions</span><span class="v">${st.compactions}</span></span>
+        <span class="stat"><span class="k">bloom answered</span><span class="v">${hitRate.toFixed(1)}%</span></span>
+        <span class="stat"><span class="k">wal bytes-ish</span><span class="v">${store.wal.length * 16}</span></span>`;
+      // bloom visualization from newest sstable
+      renderBloom();
+      // read trace
+      $('readTrace').innerHTML = store.trace.length
+        ? store.trace.map(t => `${esc(t.layer)}: ${esc(t.result)}`).join('\n')
+        : 'No reads yet.';
+    }
+
+    function renderBloom(probeSet = null) {
+      const newest = store.sstables[store.sstables.length - 1];
+      const bits = newest ? newest.bloom.bits : new Uint8Array(BLOOM_M);
+      let html = '';
+      for (let i = 0; i < BLOOM_M; i++) {
+        const isProbe = probeSet && probeSet.has(i);
+        html += `<i class="${isProbe ? 'probe' : bits[i] ? 'on' : ''}"></i>`;
+      }
+      $('bloomBits').innerHTML = html;
+    }
+
+    function doPut() {
+      const k = $('opKey').value.trim(), v = $('opVal').value;
+      if (!k) { setResult('<div class="finding risk"><span class="kind">error</span><div class="detail">Key required.</div></div>'); return; }
+      put(k, v);
+      const flushed = store.stats.flushes;
+      setResult(`<div class="finding ok"><span class="kind">put</span><div class="detail"><code class="mono">${esc(k)}</code> → <code class="mono">${esc(v)}</code> · WAL appended first, then memtable${flushed && store.mem.size === 0 ? ' · memtable was full → flushed to sst' : ''}</div></div>`);
+      render();
+    }
+    function doGet() {
+      const k = $('opKey').value.trim();
+      if (!k) return;
+      const r = get(k);
+      if (r.found) setResult(`<div class="finding ok"><span class="kind">get</span><div class="detail"><code class="mono">${esc(k)}</code> = <code class="mono">${esc(String(r.value))}</code> · from ${esc(r.from)}</div></div>`);
+      else if (r.deleted) setResult(`<div class="finding risk"><span class="kind">deleted</span><div class="detail"><code class="mono">${esc(k)}</code> hit a tombstone (${esc(r.from)}) — read stops; key is gone.</div></div>`);
+      else setResult(`<div class="finding risk"><span class="kind">not found</span><div class="detail"><code class="mono">${esc(k)}</code> absent everywhere${store.sstables.length ? ' — bloom filters skipped the files that definitely lack it' : ''}.</div></div>`);
+      render();
+    }
+    function doDel() {
+      const k = $('opKey').value.trim();
+      if (!k) return;
+      const existed = del(k);
+      setResult(`<div class="finding ${existed ? 'ok' : 'risk'}"><span class="kind">delete</span><div class="detail">Tombstone written for <code class="mono">${esc(k)}</code>${existed ? '' : ' (was already absent — tombstone still needed to mask older files)'} · discard only after compact.</div></div>`);
+      render();
+    }
+
+    $('putBtn').addEventListener('click', doPut);
+    $('getBtn').addEventListener('click', doGet);
+    $('delBtn').addEventListener('click', doDel);
+    $('opVal').addEventListener('keydown', (e) => { if (e.key === 'Enter') doPut(); });
+    $('opKey').addEventListener('keydown', (e) => { if (e.key === 'Enter') doGet(); });
+    $('flushBtn').addEventListener('click', () => {
+      if (!store.mem.size) { setResult('<div class="finding risk"><span class="kind">flush</span><div class="detail">Memtable is empty.</div></div>'); return; }
+      flush();
+      setResult('<div class="finding ok"><span class="kind">flush</span><div class="detail">Memtable written to a new SSTable (sorted keys + sparse index + bloom), <b>then</b> WAL cleared.</div></div>');
+      render();
+    });
+    $('compactBtn').addEventListener('click', () => {
+      const before = store.sstables.reduce((n, s) => n + s.entries.size, 0);
+      compact();
+      const after = store.sstables.reduce((n, s) => n + s.entries.size, 0);
+      setResult(`<div class="finding ok"><span class="kind">compact</span><div class="detail">Merged every file newest-first, first sighting of each key wins, tombstones dropped after full merge. ${before} → ${after} entries.</div></div>`);
+      render();
+    });
+    $('crashBtn').addEventListener('click', () => {
+      const r = crashRecover();
+      setResult(`<div class="finding risk"><span class="kind">crash</span><div class="detail">Process killed mid-append: discarded ${r.discarded} trailing WAL record(s), replayed ${r.recovered} into a fresh memtable. SSTables untouched. Corruption in the <i>middle</i> of the log would be refused — a torn tail is normal.</div></div>`);
+      render();
+    });
+    $('resetBtn').addEventListener('click', () => {
+      store = createStore(Number($('memLimit').value));
+      store.trace = [];
+      setResult('');
+      render();
+      $('readTrace').textContent = 'No reads yet.';
+    });
+    $('memLimit').addEventListener('change', () => { store.flushAt = Number($('memLimit').value); });
+    $('bloomBtn').addEventListener('click', () => {
+      const key = $('bloomKey').value.trim();
+      const newest = store.sstables[store.sstables.length - 1];
+      if (!newest) {
+        renderBloom();
+        $('bloomOut').textContent = 'No SSTable yet — put some keys and flush.';
+        return;
+      }
+      const r = newest.bloom.test(key);
+      renderBloom(r.probe);
+      const inStore = get(key);
+      if (!r.present) {
+        $('bloomOut').innerHTML = `<span style="color:var(--good);font-weight:700">DEFINITELY NOT in sst-${newest.id}</span>\nAt least one of ${BLOOM_K} bit positions is clear — skip the disk read entirely.\npositions: [${[...r.probe].join(', ')}]`;
+      } else {
+        $('bloomOut').innerHTML = `<span style="color:var(--bad);font-weight:700">MAYBE present in sst-${newest.id}</span>\nAll ${BLOOM_K} positions set — must scan the file to know for sure.\npositions: [${[...r.probe].join(', ')}]\nactual: ${inStore.found ? 'FOUND' : 'absent (false positive)'}`;
+      }
+      // don't count bloom probe as a full get for stats confusion — rollback gets
+      store.stats.gets = Math.max(0, store.stats.gets - 1);
+      store.trace = [];
+      render();
+      renderBloom(r.probe);
+    });
+
+    // demo seed
+    put('city', 'Lahore');
+    put('country', 'PK');
+    put('lang', 'ur');
+    put('temp', '31');
+    setResult('');
+    render();
+    $('readTrace').textContent = 'No reads yet.';
+  </script>
+</body>
+</html>
