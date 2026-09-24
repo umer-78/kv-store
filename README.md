@@ -1,5 +1,9 @@
 # kv
 
+[![CI](https://github.com/umer-78/kv-store/actions/workflows/ci.yml/badge.svg)](https://github.com/umer-78/kv-store/actions/workflows/ci.yml)
+
+**Live demo:** https://umer-78.github.io/kv-store/
+
 A log-structured key-value store in Go, written from scratch: write-ahead log,
 in-memory table, immutable sorted files, bloom filters, compaction and crash
 recovery. No dependencies outside the standard library.
