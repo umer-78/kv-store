@@ -386,9 +386,22 @@ button.danger:hover {
 .result-box { max-height: 260px; overflow: auto; }
 .card h3 { font-size: 13px; color: var(--muted); margin: 0 0 6px; font-weight: 600; }
 @media (max-width: 640px) { .arrow { display: none; } }
-  </style>
+  
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+</style>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <main id="main">
+
   <div class="wrap">
     <header class="top">
       <div class="brand">
@@ -424,15 +437,15 @@ button.danger:hover {
             <option value="9999">never</option>
           </select>
         </div>
-        <button class="primary" id="putBtn">put</button>
-        <button id="getBtn">get</button>
-        <button class="danger" id="delBtn">delete</button>
+        <button class="primary" id="putBtn" type="button">put</button>
+        <button id="getBtn" type="button">get</button>
+        <button class="danger" id="delBtn" type="button">delete</button>
       </div>
       <div class="row" style="margin-top:10px">
-        <button id="flushBtn">force flush → sstable</button>
-        <button id="compactBtn">compact all</button>
-        <button id="crashBtn">simulate crash recovery</button>
-        <button id="resetBtn">reset</button>
+        <button id="flushBtn" type="button">force flush → sstable</button>
+        <button id="compactBtn" type="button">compact all</button>
+        <button id="crashBtn" type="button">simulate crash recovery</button>
+        <button id="resetBtn" type="button">reset</button>
       </div>
       <div id="opResult" style="margin-top:12px" aria-live="polite"></div>
     </section>
@@ -471,7 +484,7 @@ button.danger:hover {
             <label for="bloomKey">Probe key</label>
             <input id="bloomKey" class="mono" value="missing-key" spellcheck="false">
           </div>
-          <button class="primary" id="bloomBtn">probe</button>
+          <button class="primary" id="bloomBtn" type="button">probe</button>
         </div>
         <div class="bloom" id="bloomBits" aria-label="bloom filter bit array"></div>
         <div id="bloomOut" class="result-box">Probe a key.</div>
@@ -838,5 +851,7 @@ bloom filters answered 82.3% of file lookups without a read</div>
     render();
     $('readTrace').textContent = 'No reads yet.';
   </script>
-</body>
+
+  </main>
+  </body>
 </html>
