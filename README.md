@@ -1,4 +1,4 @@
-# kv
+# kv: log-structured key-value store
 
 [![CI](https://github.com/umer-78/kv-store/actions/workflows/ci.yml/badge.svg)](https://github.com/umer-78/kv-store/actions/workflows/ci.yml)
 
