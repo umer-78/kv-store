@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/umer-78/kv-store/actions/workflows/ci.yml/badge.svg)](https://github.com/umer-78/kv-store/actions/workflows/ci.yml)
 
+[![kv — a storage engine: the live demo](.github/preview.jpg)](https://umer-78.github.io/kv-store/)
+
 **Live demo:** https://umer-78.github.io/kv-store/
 
 A log-structured key-value store in Go, written from scratch: write-ahead log,
