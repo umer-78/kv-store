@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en" data-scene="engine" data-fx-compact="">
+<html lang="en" data-scene="lsm" data-fx-compact="" data-look="redhat" data-hero="band" data-card="glass" data-motif="lines" data-backdrop="none">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0a0c10" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#09837c" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#041211" media="(prefers-color-scheme: dark)">
   <title>kv — LSM Key-Value Store Demo</title>
   <meta property="og:type" content="website">
   <meta property="og:title" content="kv — LSM Key-Value Store Demo">
@@ -425,7 +425,7 @@ html.mk-pre header.top, html.mk-pre main section, html.mk-pre section.card, html
 <script>(function(){try{if(!(matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)){var r=document.documentElement;r.classList.add('mk-pre');setTimeout(function(){r.classList.remove('mk-pre')},2200)}}catch(e){}})();</script>
 <!-- /motion-kit:head -->
 <!-- fx:v2 -->
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@600;800&family=Red+Hat+Text:wght@400;500&family=Red+Hat+Mono:wght@400;600&display=swap" id="fx-fonts">
 <link rel="stylesheet" href="fx.css">
 <style>:root { --fx-2: #06b6d4; --fx-3: #f59e0b; }</style>
 <!-- /fx:v2 -->
@@ -439,6 +439,11 @@ html.mk-pre header.top, html.mk-pre main section, html.mk-pre section.card, html
 <meta property="og:image:alt" content="kv — LSM Key-Value Store Demo: the live demo">
 <meta name="twitter:card" content="summary_large_image">
 <!-- /og -->
+<style id="fx-look">:root[data-look] { --font: 'Red Hat Text', system-ui, -apple-system, "Segoe UI", sans-serif; --fx-display: 'Red Hat Display', system-ui, sans-serif; --mono: 'Red Hat Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; --fx-display-weight: 800; --fx-tracking: -0.03em; --fx-title-case: none; --fx-radius: 18px; --fx-hero-radius: 28px; --fx-control-radius: 999px; --accent: #09837c; --accent-hover: #096f6a; --accent-soft: #dcf9f6; --accent-glow: rgb(9 131 124 / 0.16); --on-accent: #ffffff; --fx-2: #a267cf; --fx-3: #0dbb78; --bg: #f1fcfa; --bg-elevated: #fafffe; --surface: #fbffff; --surface-2: #eaf7f5; --surface-3: #e0efed; --border: #d1e2e0; --border-strong: #b6c9c6; --line: #d1e2e0; }
+@media (prefers-color-scheme: dark) { :root[data-look]:not([data-theme="light"]) { --accent: #1db0a8; --accent-hover: #26c5bc; --accent-soft: rgb(29 176 168 / 0.14); --accent-glow: rgb(29 176 168 / 0.2); --on-accent: #011614; --fx-2: #cb97f5; --fx-3: #61d99c; --bg: #041211; --bg-elevated: #091918; --surface: #0b1d1c; --surface-2: #132524; --surface-3: #1d2f2e; --border: #253432; --border-strong: #364644; --line: #253432; } }
+:root[data-look][data-theme="dark"] { --accent: #1db0a8; --accent-hover: #26c5bc; --accent-soft: rgb(29 176 168 / 0.14); --accent-glow: rgb(29 176 168 / 0.2); --on-accent: #011614; --fx-2: #cb97f5; --fx-3: #61d99c; --bg: #041211; --bg-elevated: #091918; --surface: #0b1d1c; --surface-2: #132524; --surface-3: #1d2f2e; --border: #253432; --border-strong: #364644; --line: #253432; }</style>
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.min.js" data-fx>
+<link rel="modulepreload" href="fx3d.js" data-fx>
 </head>
 <body>
   <noscript><p style="margin:16px;padding:12px 16px;border-radius:8px;background:#fff7ed;color:#9a3412;border:1px solid #fdba74;font-family:system-ui,sans-serif">This interactive demo requires JavaScript. Please enable it to run the demo in your browser.</p></noscript>
