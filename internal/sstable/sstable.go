@@ -22,11 +22,13 @@ import (
 	"github.com/umer-78/kv-store/internal/memtable"
 )
 
+// magic opens every table file: "SSTB".
+const magic uint32 = 0x53535442
+
 const (
-	magic        uint32 = 0x53535442 // "SSTB"
-	footerSize          = 28
-	indexStride         = 16 // one index entry per 16 records
-	recordHeader        = 13 // crc32 (4) | flags (1) | key len (4) | value len (4)
+	footerSize   = 28
+	indexStride  = 16 // one index entry per 16 records
+	recordHeader = 13 // crc32 (4) | flags (1) | key len (4) | value len (4)
 )
 
 // Table is an open, read-only file.
